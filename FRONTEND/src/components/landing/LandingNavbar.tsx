@@ -139,14 +139,10 @@ export const ModernSatelliteAiLogo: React.FC<ModernSatelliteAiLogoProps> = ({
 
 interface LandingNavbarProps {
   onLaunchApp: () => void;
-  onOpenAuth?: (tab?: 'signin' | 'signup') => void;
-  onNavigateToAuth?: (page: 'login' | 'signup') => void;
 }
 
 export const LandingNavbar: React.FC<LandingNavbarProps> = ({
-  onLaunchApp,
-  onOpenAuth,
-  onNavigateToAuth
+  onLaunchApp
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -169,20 +165,13 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
   const handleScrollTo = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
     setMobileMenuOpen(false);
+    if (href === '#home') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     const element = document.querySelector(href);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
-  const handleGoToAuth = (tab: 'login' | 'signup') => {
-    setMobileMenuOpen(false);
-    if (onNavigateToAuth) {
-      onNavigateToAuth(tab);
-    } else if (onOpenAuth) {
-      onOpenAuth(tab === 'login' ? 'signin' : 'signup');
-    } else {
-      window.location.hash = tab;
     }
   };
 
@@ -205,8 +194,8 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
           <ModernSatelliteAiLogo size="sm" showText={true} />
         </a>
 
-        {/* Center: Clean Minimal Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-6 xl:gap-7">
+        {/* Center: Navigation Links with Past Underline Hover Transition Effects */}
+        <nav className="hidden lg:flex items-center gap-6 xl:gap-8">
           {navLinks.map((link) => (
             <a
               key={link.label}
@@ -220,24 +209,12 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
           ))}
         </nav>
 
-        {/* Right: Auth Buttons & Launch SatQuery AI CTA */}
+        {/* Right: Launch SatQuery AI Primary CTA & Mobile Toggle */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Dedicated Sign In Button */}
-          <button
-            type="button"
-            onClick={() => handleGoToAuth('login')}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs transition-all active:scale-95"
-            title="Sign In"
-          >
-            <LogIn className="w-3.5 h-3.5 text-blue-600" />
-            <span>Sign In</span>
-          </button>
-
-          {/* Primary CTA: Launch SatQuery AI */}
           <button
             type="button"
             onClick={onLaunchApp}
-            className="btn-gradient btn-shine px-4 py-1.5 sm:px-5 text-xs sm:text-sm"
+            className="btn-gradient btn-shine px-4 py-1.5 sm:px-5 text-xs sm:text-sm font-bold shadow-sm"
           >
             <span>Launch SatQuery AI</span>
           </button>
@@ -246,7 +223,7 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:text-blue-600"
+            className="lg:hidden p-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             aria-label="Toggle mobile menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -254,7 +231,7 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Dropdown Menu */}
+      {/* Mobile Dropdown Menu with Links */}
       {mobileMenuOpen && (
         <div className="lg:hidden px-4 pt-3 pb-6 bg-white border-b border-slate-200 shadow-lg space-y-2.5 animate-in slide-in-from-top-2 duration-200">
           {navLinks.map((link) => (
@@ -262,25 +239,18 @@ export const LandingNavbar: React.FC<LandingNavbarProps> = ({
               key={link.label}
               href={link.href}
               onClick={(e) => handleScrollTo(e, link.href)}
-              className="block px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-700 dark:text-[#A8B6CF] hover:bg-slate-100 dark:hover:bg-[#101F38] hover:text-slate-900 dark:hover:text-white transition-colors"
+              className="block px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-100 hover:text-blue-600 transition-colors"
             >
               {link.label}
             </a>
           ))}
-          <div className="pt-3 border-t border-slate-200 dark:border-[#263B5C] space-y-2.5">
-            <button
-              onClick={() => handleGoToAuth('login')}
-              className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-[#263B5C] bg-slate-50 dark:bg-[#101F38]/60 text-slate-800 dark:text-white font-semibold text-sm flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-[#152A48]"
-            >
-              <LogIn className="w-4 h-4 text-[#5B8CFF]" />
-              <span>Sign In / Register</span>
-            </button>
+          <div className="pt-3 border-t border-slate-200">
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
                 onLaunchApp();
               }}
-              className="btn-gradient btn-shine w-full py-2.5 px-4 text-sm"
+              className="btn-gradient btn-shine w-full py-2.5 px-4 text-sm font-bold shadow-sm"
             >
               <span>Launch SatQuery AI</span>
             </button>

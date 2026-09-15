@@ -77,16 +77,6 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({ result }) => {
     }
   };
 
-  const handleDownloadEvidence = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `SatQuery_Evidence_${result.id}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
   return (
     <div className="space-y-4">
       {/* Evidence Viewer Controls Bar */}
@@ -166,15 +156,6 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({ result }) => {
           >
             {maskVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             <span>Highlight Mask</span>
-          </button>
-
-          {/* Download Evidence JSON */}
-          <button
-            onClick={handleDownloadEvidence}
-            className="p-1.5 rounded-lg border border-slate-200 hover:border-blue-400 text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
-            title="Download Evidence"
-          >
-            <Download className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -442,68 +423,6 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({ result }) => {
         </div>
       )}
 
-      {/* Generated Prediction Artifacts & Deliverables */}
-      {(result.urls || result.artifacts) && (
-        <div className="p-4 rounded-xl bg-white border border-slate-200 text-xs space-y-2 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-slate-800">Generated Analysis Files:</span>
-            <span className="text-[10px] text-slate-500">Ready for download</span>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {result.urls?.overlay_url && (
-              <a
-                href={getFullArtifactUrl(result.urls.overlay_url)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-1.5 font-medium"
-              >
-                <span>🖼️</span> <span>Visual Overlay</span>
-              </a>
-            )}
-            {result.urls?.heatmap_url && (
-              <a
-                href={getFullArtifactUrl(result.urls.heatmap_url)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-1.5 font-medium"
-              >
-                <span>🔥</span> <span>Confidence Heatmap</span>
-              </a>
-            )}
-            {result.urls?.mask_url && (
-              <a
-                href={getFullArtifactUrl(result.urls.mask_url)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1.5 font-medium"
-              >
-                <span>⬛</span> <span>Detection Mask</span>
-              </a>
-            )}
-            {result.urls?.report_markdown_url && (
-              <a
-                href={getFullArtifactUrl(result.urls.report_markdown_url)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1.5 font-medium"
-              >
-                <span>📄</span> <span>Inspection Report (.md)</span>
-              </a>
-            )}
-            {result.urls?.geojson_url && (
-              <a
-                href={getFullArtifactUrl(result.urls.geojson_url)}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors flex items-center gap-1.5 font-medium"
-              >
-                <span>🗺️</span> <span>GeoJSON Map Data</span>
-              </a>
-            )}
-          </div>
-        </div>
-      )}
     </div>
-
   );
 };

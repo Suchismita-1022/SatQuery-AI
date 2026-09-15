@@ -5,18 +5,20 @@ import {
   Eye, 
   Download
 } from 'lucide-react';
-import { MOCK_SAVED_REPORTS } from '../../data/mockData';
 import { ReportItem } from '../../types';
 import { SatQueryApiService } from '../../services/apiService';
+import { PdfReportService } from '../../services/pdfReportService';
 
 interface AnalysisHistoryViewProps {
   onViewReport: (report: ReportItem) => void;
   onOpenInWorkspace?: (report: ReportItem) => void;
+  customReports?: ReportItem[];
 }
 
 export const AnalysisHistoryView: React.FC<AnalysisHistoryViewProps> = ({
   onViewReport,
-  onOpenInWorkspace
+  onOpenInWorkspace,
+  customReports = []
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Change' | 'Grounding' | 'VQA' | 'Optical+SAR'>('All');
@@ -47,7 +49,7 @@ export const AnalysisHistoryView: React.FC<AnalysisHistoryViewProps> = ({
     return () => { mounted = false; };
   }, []);
 
-  const allItems = [...serverReports, ...MOCK_SAVED_REPORTS];
+  const allItems = [...customReports, ...serverReports];
 
   const filteredReports = allItems.filter(item => {
     const matchesSearch = item.query.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -62,14 +64,8 @@ export const AnalysisHistoryView: React.FC<AnalysisHistoryViewProps> = ({
     return matchesSearch;
   });
 
-  const handleDownloadSingle = (report: ReportItem) => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(report, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `SatQuery_Report_${report.id}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const handleDownloadSingle = async (report: ReportItem) => {
+    await PdfReportService.downloadReportPdf(report);
   };
 
   return (
@@ -181,7 +177,7 @@ export const AnalysisHistoryView: React.FC<AnalysisHistoryViewProps> = ({
                       <button
                         onClick={() => handleDownloadSingle(row)}
                         className="p-1.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:text-blue-600 transition-colors text-slate-600 cursor-pointer"
-                        title="Download Report JSON"
+                        title="Download PDF Report"
                       >
                         <Download className="w-3.5 h-3.5" />
                       </button>
