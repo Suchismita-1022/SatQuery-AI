@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe, Sparkles, Home, LogIn, UserPlus, LayoutDashboard, FileCheck2 } from 'lucide-react';
+import { Globe, Sparkles, Home, LayoutDashboard, FileCheck2, FileText } from 'lucide-react';
 import { ModernSatelliteAiLogo } from '../landing/LandingNavbar';
 
 export const Footer: React.FC = () => {
@@ -58,35 +58,58 @@ export const Footer: React.FC = () => {
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-900 mb-3">
               Quick Links
             </h4>
-            <ul className="space-y-1.5 text-[11px]">
+            <ul className="space-y-2 text-[11px]">
               <li>
-                <a href="#landing" className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5">
-                  <Home className="w-3 h-3 text-slate-400" />
+                <a
+                  href="#home"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                >
+                  <Home className="w-3.5 h-3.5 text-slate-400" />
                   Home
                 </a>
               </li>
               <li>
-                <a href="#features" className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-slate-400" />
+                <a
+                  href="#features"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const el = document.querySelector('#features');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-slate-400" />
                   Features
                 </a>
               </li>
               <li>
-                <a href="#login" className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5">
-                  <LogIn className="w-3 h-3 text-slate-400" />
-                  Sign In
+                <a
+                  href="#dashboard"
+                  onClick={() => {
+                    window.location.hash = 'dashboard';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5 text-slate-400" />
+                  New Analysis
                 </a>
               </li>
               <li>
-                <a href="#signup" className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5">
-                  <UserPlus className="w-3 h-3 text-slate-400" />
-                  Create Account
-                </a>
-              </li>
-              <li>
-                <a href="#dashboard" className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5">
-                  <LayoutDashboard className="w-3 h-3 text-slate-400" />
-                  My Workspace
+                <a
+                  href="#reports"
+                  onClick={() => {
+                    window.location.hash = 'reports';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  Saved Reports
                 </a>
               </li>
             </ul>

@@ -8,7 +8,8 @@ import {
   RefreshCw, 
   AlertCircle,
   Share2,
-  BookmarkPlus
+  BookmarkPlus,
+  Download
 } from 'lucide-react';
 import { ImageUploader } from './ImageUploader';
 import { QueryBox } from './QueryBox';
@@ -22,8 +23,9 @@ import {
   AgentProcessStep, 
   ReportItem 
 } from '../../types';
-import { AnalysisScenario, MOCK_SCENARIOS, MOCK_SAVED_REPORTS } from '../../data/mockData';
+import { AnalysisScenario, MOCK_SCENARIOS } from '../../data/mockData';
 import { SatQueryApiService, AnalyzeResult } from '../../services/apiService';
+import { PdfReportService } from '../../services/pdfReportService';
 
 interface NewAnalysisWorkspaceProps {
   initialScenario?: AnalysisScenario;
@@ -71,6 +73,7 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
   const [processingStepIndex, setProcessingStepIndex] = useState(0);
   const [currentResult, setCurrentResult] = useState<AnalysisResultData | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Step definition with user-friendly plain English descriptions
   const agentSteps: AgentProcessStep[] = [
@@ -283,6 +286,34 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
     setTimeout(() => setSavedSuccess(false), 4000);
   };
 
+  const handleDownloadCurrentPdf = async () => {
+    if (!currentResult) return;
+    setIsDownloadingPdf(true);
+    try {
+      const rep: ReportItem = {
+        id: currentResult.id.replace('AN-', 'REP-'),
+        title: `${currentResult.task}: ${query.slice(0, 45)}`,
+        query: currentResult.query,
+        date: new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC',
+        task: currentResult.task,
+        confidence: currentResult.confidence,
+        answer: currentResult.answer,
+        modelsUsed: currentResult.modelsUsed,
+        executionTime: `${currentResult.executionSummary.latencyMs} ms`,
+        status: 'Generated',
+        inputSummary: currentResult.executionSummary.inputSummary,
+        evidenceVisual: currentResult.evidence.changeMap?.visual || currentResult.evidence.imageA?.visual,
+        tags: [currentResult.task, currentResult.mode],
+        fullAnalysis: currentResult
+      };
+      await PdfReportService.downloadReportPdf(rep);
+    } catch (err) {
+      console.error('Error downloading PDF report:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const renderFormattedAnswer = (text: string) => {
     if (!text) return null;
     const lines = text.split('\n');
@@ -415,8 +446,26 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={handleDownloadCurrentPdf}
+                  disabled={isDownloadingPdf}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-60"
+                >
+                  {isDownloadingPdf ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Generating PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download PDF</span>
+                    </>
+                  )}
+                </button>
+
+                <button
                   onClick={handleSaveToReports}
-                  className={`px-3.5 py-1.5 rounded-xl border font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-xl border font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                     savedSuccess
                       ? 'bg-emerald-600 text-white border-emerald-600 font-bold'
                       : 'bg-white border-slate-300 text-slate-800 hover:border-blue-400 hover:text-blue-600'

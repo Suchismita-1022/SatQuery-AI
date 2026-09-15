@@ -10,15 +10,11 @@ import { RevealOnScroll } from '../common/RevealOnScroll';
 interface LandingPageProps {
   onLaunchApp: () => void;
   onLaunchWithScenario?: (query?: string, mode?: 'single' | 'bi-temporal' | 'optical-sar') => void;
-  onOpenAuth?: (tab?: 'signin' | 'signup') => void;
-  onNavigateToAuth?: (page: 'login' | 'signup') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onLaunchApp,
-  onLaunchWithScenario,
-  onOpenAuth,
-  onNavigateToAuth
+  onLaunchWithScenario
 }) => {
   const handleScrollToFeatures = () => {
     const el = document.querySelector('#features');
@@ -31,8 +27,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* 1. Landing Navbar */}
       <LandingNavbar
         onLaunchApp={onLaunchApp}
-        onOpenAuth={onOpenAuth}
-        onNavigateToAuth={onNavigateToAuth}
       />
 
       {/* Main Sections */}

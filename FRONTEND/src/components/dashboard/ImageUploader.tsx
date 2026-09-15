@@ -78,26 +78,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       const isTiff = file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
-      const isPng = file.name.toLowerCase().endsWith('.png');
-      const isJpeg = file.name.toLowerCase().endsWith('.jpg') || file.name.toLowerCase().endsWith('.jpeg');
 
-      if (!isTiff && !isPng && !isJpeg) {
-        setErrorMessage(`"${file.name}" is not supported. Please upload satellite images (.tif, .tiff).`);
+      if (!isTiff) {
+        setErrorMessage(`"${file.name}" is not supported. SatQuery AI only accepts satellite imagery in GeoTIFF / TIFF format (.tif, .tiff). Standard JPEG (.jpg, .jpeg) and PNG (.png) files are not accepted.`);
         continue;
       }
 
       const isSar = file.name.toLowerCase().includes('sar') || file.name.toLowerCase().includes('s1');
-
-      let previewUrl: string | undefined = undefined;
-      if (isPng || isJpeg) {
-        try {
-          previewUrl = URL.createObjectURL(file);
-        } catch {
-          // ignore
-        }
-      }
-
-      const formatLabel: 'GeoTIFF' | 'TIFF' | 'PNG' | 'JPEG' = isTiff ? 'GeoTIFF' : isPng ? 'PNG' : 'JPEG';
+      const formatLabel: 'GeoTIFF' | 'TIFF' = file.name.toLowerCase().endsWith('.tiff') ? 'TIFF' : 'GeoTIFF';
 
       const newImage: UploadedImageMeta = {
         id: `custom-img-${Date.now()}-${i}`,
@@ -107,11 +95,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         modality: isSar ? 'Radar' : 'Optical',
         acquisitionDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
         sizeMb: Number((file.size / (1024 * 1024)).toFixed(1)) || 16.4,
-        validationStatus: isSar ? 'Valid Radar Image' : isTiff ? 'Valid Satellite Image' : 'Valid Image',
+        validationStatus: isSar ? 'Valid Radar Image' : 'Valid Satellite GeoTIFF',
         previewVisual: isSar
           ? 'linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)'
           : 'linear-gradient(135deg, #134e4a 0%, #065f46 45%, #0284c7 100%)',
-        previewUrl,
+        previewUrl: undefined,
         fileObject: file
       };
 
@@ -219,7 +207,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".tif,.tiff,.png,.jpg,.jpeg"
+          accept=".tif,.tiff"
           onChange={handleFileInputChange}
           className="hidden"
         />
@@ -234,7 +222,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               Drag & Drop Satellite Imagery Here
             </h4>
             <p className="text-xs text-slate-500 mt-1">
-              Supports <strong className="text-blue-600">satellite images (.tif, .tiff)</strong> or click to browse.
+              Supports <strong className="text-blue-600">satellite rasters (.tif, .tiff) only</strong>. Standard JPEG or PNG formats are not accepted.
             </p>
           </div>
         </div>

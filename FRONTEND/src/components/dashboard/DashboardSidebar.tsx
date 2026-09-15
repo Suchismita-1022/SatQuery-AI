@@ -39,14 +39,19 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
 }) => {
   const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
 
+  const pollHealth = async () => {
+    const health = await SatQueryApiService.checkHealth();
+    setBackendHealth(health);
+  };
+
   useEffect(() => {
     let mounted = true;
-    const pollHealth = async () => {
+    const runPoll = async () => {
       const health = await SatQueryApiService.checkHealth();
       if (mounted) setBackendHealth(health);
     };
-    pollHealth();
-    const interval = setInterval(pollHealth, 12000);
+    runPoll();
+    const interval = setInterval(runPoll, 12000);
     return () => {
       mounted = false;
       clearInterval(interval);
@@ -201,35 +206,35 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" title="Online" />
-              {onSignOut && (
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-100 rounded transition-colors"
-                  title="Sign Out / Switch Account"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <span className={`w-2 h-2 rounded-full ${backendHealth ? 'bg-emerald-500' : 'bg-amber-500'}`} title={backendHealth ? 'Online' : 'Offline'} />
             </div>
           </div>
         )}
 
-        {/* Bottom Requirement: AI System Ready */}
-        <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-[11px] font-mono font-medium text-emerald-800">
+        {/* Bottom Requirement: AI System Status */}
+        <div
+          onClick={pollHealth}
+          className={`px-3 py-2 rounded-xl border flex items-center justify-between text-[11px] font-mono font-medium cursor-pointer transition-colors ${
+            backendHealth
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
+              : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100'
+          }`}
+          title="Click to refresh AI Core status"
+        >
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${backendHealth ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
             </span>
             <span>
               {backendHealth
                 ? `SatQuery Core: ${backendHealth.device.toUpperCase()}`
-                : systemStatus}
+                : 'AI Core: Fallback Mode'}
             </span>
           </div>
-          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-            {backendHealth ? 'Connected' : 'Ready'}
+          <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold ${
+            backendHealth ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+          }`}>
+            {backendHealth ? 'Connected' : 'Offline'}
           </span>
         </div>
       </div>

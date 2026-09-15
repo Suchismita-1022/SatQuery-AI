@@ -352,10 +352,16 @@ export const StagingPanel: React.FC<StagingPanelProps> = ({
             type="file"
             ref={fileInputRef}
             className="hidden"
-            accept=".tif,.tiff,.png,.jpg,.jpeg,.geojson,.json"
+            accept=".tif,.tiff"
             onChange={(e) => {
               if (e.target.files && e.target.files[0]) {
-                handleRealFileUpload(e.target.files[0]);
+                const file = e.target.files[0];
+                const isTiff = file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
+                if (isTiff) {
+                  handleRealFileUpload(file);
+                } else {
+                  alert(`"${file.name}" is not supported. Only satellite imagery in GeoTIFF (.tif, .tiff) format is accepted.`);
+                }
               }
             }}
           />
@@ -371,7 +377,13 @@ export const StagingPanel: React.FC<StagingPanelProps> = ({
               e.preventDefault();
               setIsDraggingFile(false);
               if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                handleRealFileUpload(e.dataTransfer.files[0]);
+                const file = e.dataTransfer.files[0];
+                const isTiff = file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
+                if (isTiff) {
+                  handleRealFileUpload(file);
+                } else {
+                  alert(`"${file.name}" is not supported. Only satellite imagery in GeoTIFF (.tif, .tiff) format is accepted.`);
+                }
               } else {
                 handleSimulatedFileUpload();
               }
@@ -384,10 +396,10 @@ export const StagingPanel: React.FC<StagingPanelProps> = ({
           >
             <UploadCloud className="w-6 h-6 mx-auto text-blue-600 mb-1" />
             <p className="text-xs font-semibold text-slate-800">
-              Drop satellite or aerial images here
+              Drop satellite GeoTIFF here
             </p>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              Click to browse files (.tif, .png, .jpg, .geojson)
+              Click to browse files (.tif, .tiff only)
             </p>
           </div>
 
