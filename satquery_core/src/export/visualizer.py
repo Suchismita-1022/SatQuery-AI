@@ -76,12 +76,17 @@ class ArtifactVisualizer:
     ) -> str:
         """
         Save normalized probability / confidence heatmap with colorbar scale and percentage coverage.
+        Thread-safe implementation avoiding pyplot global state.
         """
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+
         out_path = Path(output_path).resolve()
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        h, w = prob_map.shape
-        fig, ax = plt.subplots(figsize=(8, 8), dpi=150)
+        fig = Figure(figsize=(8, 8), dpi=150)
+        canvas = FigureCanvasAgg(fig)
+        ax = fig.add_subplot(111)
         im = ax.imshow(prob_map, cmap=colormap, vmin=0.0, vmax=1.0)
 
         # Style plot
@@ -93,9 +98,9 @@ class ArtifactVisualizer:
         cbar.set_label("Confidence / Probability Score", fontsize=10)
         cbar.ax.tick_params(labelsize=9)
 
-        plt.tight_layout()
-        plt.savefig(out_path, bbox_inches="tight", dpi=150)
-        plt.close(fig)
+        fig.tight_layout()
+        fig.savefig(out_path, bbox_inches="tight", dpi=150)
+        fig.clear()
         return str(out_path)
 
     @classmethod

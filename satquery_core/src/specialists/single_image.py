@@ -215,12 +215,17 @@ class SingleImageSpecialist:
         else:
             input_array = geotiff.array[:self.in_channels]
 
-        stride = tile_size - tile_overlap
+        # Adaptive stride prevents exceeding Render's 100-second edge gateway timeout
+        if max(height, width) > 1024:
+            stride = tile_size
+        else:
+            stride = max(tile_size - tile_overlap, 64)
+
         accum_logits = np.zeros((self.num_classes, height, width), dtype=np.float32)
         count_map = np.zeros((height, width), dtype=np.float32)
 
-        # Sliding window tiling
-        with torch.no_grad():
+        # Sliding window tiling in inference mode
+        with torch.inference_mode():
             for r in range(0, height, stride):
                 r_end = min(r + tile_size, height)
                 r_start = max(0, r_end - tile_size)

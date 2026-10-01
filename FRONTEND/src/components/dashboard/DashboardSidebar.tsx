@@ -27,6 +27,7 @@ interface DashboardSidebarProps {
   user: UserProfile | null;
   systemStatus?: string;
   onSignOut?: () => void;
+  backendHealth?: BackendHealth | null;
 }
 
 export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -35,9 +36,10 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   onCloseSidebar,
   user,
   systemStatus = 'AI System Ready',
-  onSignOut
+  onSignOut,
+  backendHealth: propBackendHealth
 }) => {
-  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
+  const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(propBackendHealth ?? null);
 
   const pollHealth = async () => {
     const health = await SatQueryApiService.checkHealth();
@@ -45,18 +47,18 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   };
 
   useEffect(() => {
+    if (propBackendHealth !== undefined) {
+      setBackendHealth(propBackendHealth);
+      return;
+    }
     let mounted = true;
-    const runPoll = async () => {
-      const health = await SatQueryApiService.checkHealth();
+    SatQueryApiService.checkHealth().then(health => {
       if (mounted) setBackendHealth(health);
-    };
-    runPoll();
-    const interval = setInterval(runPoll, 12000);
+    }).catch(() => {});
     return () => {
       mounted = false;
-      clearInterval(interval);
     };
-  }, []);
+  }, [propBackendHealth]);
 
   const menuItems: Array<{
     id: DashboardView;

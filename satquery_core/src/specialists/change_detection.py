@@ -227,11 +227,14 @@ class ChangeDetectionSpecialist:
         t1_arr = self._prepare_array(pre_geotiff.array, min_h, min_w)
         t2_arr = self._prepare_array(post_geotiff.array, min_h, min_w)
 
-        stride = tile_size - tile_overlap
+        if max(min_h, min_w) > 1024:
+            stride = tile_size
+        else:
+            stride = max(tile_size - tile_overlap, 64)
         accum_prob = np.zeros((min_h, min_w), dtype=np.float32)
         count_map = np.zeros((min_h, min_w), dtype=np.float32)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             for r in range(0, min_h, stride):
                 r_end = min(r + tile_size, min_h)
                 r_start = max(0, r_end - tile_size)

@@ -63,7 +63,7 @@ from satquery_core.src.ingestion.geotiff_loader import GeoTIFFLoader
 engine = SatQueryEngine(default_crs="EPSG:4326")
 geotiff_loader = GeoTIFFLoader()
 
-ALLOWED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".jp2"}
+ALLOWED_EXTENSIONS = {".tif", ".tiff"}
 
 
 def allowed_file(filename: str) -> bool:
@@ -165,13 +165,10 @@ def ensure_preview_png(file_path: Path) -> Optional[str]:
     return None
 
 
-# Pre-generate previews for bundled sample datasets on boot
+# Previews for bundled sample datasets are generated on-demand or pre-staged
 def warm_sample_previews():
     for f in SAMPLES_DIR.glob("*.tif*"):
         ensure_preview_png(f)
-
-
-warm_sample_previews()
 
 
 @app.route("/", methods=["GET"])
@@ -188,35 +185,20 @@ def index():
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
-    """Health check and engine status."""
-    device = str(engine.get_specialist("single_image_s2").device)
+    """Ultra-lightweight health check for edge monitoring and cold-start detection."""
     return jsonify({
         "status": "healthy",
-        "engine": "SatQuery AI",
-        "version": "2.0.0-offline",
-        "device": device,
-        "specialists_ready": [
-            "single_image_s2",
-            "single_image_s1",
-            "siamese_change_detection",
-            "cross_modal_fusion",
-        ],
+        "service": "SatQuery AI Backend",
+        "version": "2.0.0-production",
         "physics_verifier": "active",
-        "paths": {
-            "inputs_upload": str(UPLOADS_DIR),
-            "inputs_samples": str(SAMPLES_DIR),
-            "outputs_masks": str(MASKS_DIR),
-            "outputs_heatmaps": str(HEATMAPS_DIR),
-            "outputs_overlays": str(OVERLAYS_DIR),
-            "outputs_reports": str(REPORTS_DIR),
-        },
-    })
+    }), 200
 
 
 @app.route("/api/models", methods=["GET"])
 def list_models():
-    """Return catalog of deep learning specialist models & tools."""
-    device = str(engine.get_specialist("single_image_s2").device)
+    """Return catalog of deep learning specialist models & tools without forcing instantiation."""
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     models = [
         {
             "id": "convnextv2_s2",
@@ -327,7 +309,7 @@ def upload_file():
 
     if not allowed_file(file.filename):
         return jsonify({
-            "error": f"Unsupported file type. Supported: {', '.join(ALLOWED_EXTENSIONS)}"
+            "error": "Unsupported file format. SatQuery AI strictly requires satellite imagery in GeoTIFF / TIFF format (.tif, .tiff). Standard formats like PNG and JPEG are not supported."
         }), 400
 
     safe_name = secure_filename(file.filename)
@@ -366,34 +348,30 @@ def analyze_query():
     # Check if primary file was uploaded in multipart request
     if "file" in request.files:
         file = request.files["file"]
-        if file.filename and allowed_file(file.filename):
-            already_exists = False
-            if image_path_str:
-                p = Path(image_path_str)
-                if (p.is_absolute() and p.exists()) or (INPUTS_DIR / image_path_str).exists() or (UPLOADS_DIR / image_path_str).exists():
-                    already_exists = True
-            if not already_exists:
-                safe_name = secure_filename(file.filename)
-                saved_filename = f"upload_{int(time.time())}_{safe_name}"
-                target_path = UPLOADS_DIR / saved_filename
-                file.save(target_path)
-                image_path_str = str(target_path)
+        if file and file.filename:
+            if not allowed_file(file.filename):
+                return jsonify({
+                    "error": "Invalid primary image format. SatQuery AI strictly requires satellite imagery in GeoTIFF / TIFF format (.tif, .tiff)."
+                }), 400
+            safe_name = secure_filename(file.filename)
+            saved_filename = f"upload_{int(time.time())}_{safe_name}"
+            target_path = UPLOADS_DIR / saved_filename
+            file.save(target_path)
+            image_path_str = str(target_path)
 
     # Check if secondary file was uploaded in multipart request
     if "secondary_file" in request.files:
         sec_file = request.files["secondary_file"]
-        if sec_file.filename and allowed_file(sec_file.filename):
-            sec_already_exists = False
-            if secondary_path_str:
-                sec_p = Path(secondary_path_str)
-                if (sec_p.is_absolute() and sec_p.exists()) or (INPUTS_DIR / secondary_path_str).exists() or (UPLOADS_DIR / secondary_path_str).exists():
-                    sec_already_exists = True
-            if not sec_already_exists:
-                safe_name = secure_filename(sec_file.filename)
-                saved_filename = f"upload_{int(time.time())}_sec_{safe_name}"
-                target_path = UPLOADS_DIR / saved_filename
-                sec_file.save(target_path)
-                secondary_path_str = str(target_path)
+        if sec_file and sec_file.filename:
+            if not allowed_file(sec_file.filename):
+                return jsonify({
+                    "error": "Invalid secondary image format. SatQuery AI strictly requires satellite imagery in GeoTIFF / TIFF format (.tif, .tiff)."
+                }), 400
+            safe_name = secure_filename(sec_file.filename)
+            saved_filename = f"upload_{int(time.time())}_sec_{safe_name}"
+            target_path = UPLOADS_DIR / saved_filename
+            sec_file.save(target_path)
+            secondary_path_str = str(target_path)
 
     # Resolve primary image path
     primary_path = None
@@ -414,20 +392,15 @@ def analyze_query():
             if matches:
                 primary_path = matches[0]
 
-    # Intelligent fallback for prototype presets or missing files
+    # Explicit validation: Never silently substitute a user's uploaded raster
+    if image_path_str and (not primary_path or not primary_path.exists()):
+        return jsonify({
+            "error": f"Uploaded or specified satellite image '{image_path_str}' could not be located or opened."
+        }), 400
+
+    # Default preset only if user provided NO image input at all (e.g. empty test ping)
     if not primary_path or not primary_path.exists():
-        img_str_low = (image_path_str or "").lower()
-        if "sar" in img_str_low or "s1" in img_str_low:
-            cand = (UPLOADS_DIR / "SAR" / "0A.tif") if (UPLOADS_DIR / "SAR" / "0A.tif").exists() else (SAMPLES_DIR / "sentinel1_godavari_sar.tif")
-        elif "post" in img_str_low or "2025" in img_str_low or "t1" in img_str_low:
-            cand = SAMPLES_DIR / "sentinel2_godavari_post.tif"
-        elif "urban" in (query_text or "").lower() and (SAMPLES_DIR / "sample_urban.png").exists():
-            cand = SAMPLES_DIR / "sample_urban.png"
-        elif "cropland" in (query_text or "").lower() and (SAMPLES_DIR / "sample_cropland.png").exists():
-            cand = SAMPLES_DIR / "sample_cropland.png"
-        else:
-            cand = SAMPLES_DIR / "sentinel2_godavari_pre.tif"
-        primary_path = cand
+        primary_path = SAMPLES_DIR / "sentinel2_godavari_pre.tif"
 
     # Set default analytical query if not specified
     if not query_text or query_text.strip() == "":
@@ -452,11 +425,9 @@ def analyze_query():
             if matches:
                 secondary_path = matches[0]
             else:
-                sec_str_low = secondary_path_str.lower()
-                if "sar" in sec_str_low or "s1" in sec_str_low:
-                    secondary_path = SAMPLES_DIR / "sentinel1_godavari_sar.tif"
-                else:
-                    secondary_path = SAMPLES_DIR / "sentinel2_godavari_post.tif"
+                return jsonify({
+                    "error": f"Secondary satellite raster '{secondary_path_str}' could not be located or opened."
+                }), 400
 
     # Auto-detect if secondary image is required by query intent
     if not secondary_path and query_text:
@@ -475,7 +446,9 @@ def analyze_query():
     )
 
     try:
-        output: EngineOutput = engine.execute_query(req, save_artifacts=True)
+        import torch
+        with torch.inference_mode():
+            output: EngineOutput = engine.execute_query(req, save_artifacts=True)
 
         art = output.artifacts
         artifact_urls = {}
@@ -508,6 +481,9 @@ def analyze_query():
         })
     except Exception as exc:
         return jsonify({"error": f"Inference failed: {str(exc)}"}), 500
+    finally:
+        import gc
+        gc.collect()
 
 
 @app.route("/api/chat", methods=["POST"])

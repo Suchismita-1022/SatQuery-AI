@@ -38,8 +38,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
   const [healthStatus, setHealthStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
-  const checkBackendHealth = async () => {
-    setHealthStatus('checking');
+  const checkBackendHealth = async (silent = false) => {
+    if (!silent) setHealthStatus('checking');
     try {
       const health = await SatQueryApiService.checkHealth();
       if (health && (health.status === 'ok' || health.status === 'online' || health.status === 'healthy')) {
@@ -57,7 +57,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   useEffect(() => {
     checkBackendHealth();
-    const timer = setInterval(checkBackendHealth, 15000);
+    // 60-second gentle heartbeat, paused when browser tab is hidden
+    const timer = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        checkBackendHealth(true);
+      }
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -124,7 +129,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={checkBackendHealth}
+            onClick={() => checkBackendHealth()}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer shadow-xs border ${
               healthStatus === 'online'
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'

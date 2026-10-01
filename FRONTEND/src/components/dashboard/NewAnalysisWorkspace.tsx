@@ -74,6 +74,7 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
   const [currentResult, setCurrentResult] = useState<AnalysisResultData | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Step definition with user-friendly plain English descriptions
   const agentSteps: AgentProcessStep[] = [
@@ -113,18 +114,18 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
     if (!query.trim() || isProcessing) return;
 
     setIsProcessing(true);
+    setErrorMessage(null);
     setCurrentResult(null);
     setSavedSuccess(false);
     setProcessingStepIndex(0);
 
-    // Progression timing through the agent steps
-    setTimeout(() => setProcessingStepIndex(1), 250);
-    setTimeout(() => setProcessingStepIndex(2), 500);
-    setTimeout(() => setProcessingStepIndex(3), 800);
-    setTimeout(() => setProcessingStepIndex(4), 1100);
-    setTimeout(() => setProcessingStepIndex(5), 1400);
-
-    let realApiResult: AnalyzeResult | null = null;
+    const stepTimers: Array<ReturnType<typeof setTimeout>> = [
+      setTimeout(() => setProcessingStepIndex(1), 250),
+      setTimeout(() => setProcessingStepIndex(2), 500),
+      setTimeout(() => setProcessingStepIndex(3), 800),
+      setTimeout(() => setProcessingStepIndex(4), 1100),
+      setTimeout(() => setProcessingStepIndex(5), 1400)
+    ];
 
     try {
       const primaryFile = images[0]?.fileObject;
@@ -132,7 +133,7 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
       const secondaryFile = images[1]?.fileObject;
       const secondaryServerPath = images[1]?.serverPath || images[1]?.name;
 
-      realApiResult = await SatQueryApiService.runAnalysis({
+      const realApiResult = await SatQueryApiService.runAnalysis({
         queryText: query,
         imagePath: primaryServerPath,
         file: primaryFile,
@@ -141,16 +142,11 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
         confidenceThreshold: 0.45,
         enablePhysicsVerification: true
       });
-    } catch {
-      // Backend offline or unreachable; fall back to client benchmark
-    }
 
-    setProcessingStepIndex(6);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setProcessingStepIndex(7);
+      setProcessingStepIndex(6);
 
       if (realApiResult && realApiResult.success) {
+        setProcessingStepIndex(7);
         const stats = realApiResult.statistics;
         const audit = realApiResult.audit_trace;
         const urls = realApiResult.urls;
@@ -227,35 +223,20 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
           onSaveReport(autoReport);
         }
       } else {
-        // Fallback simulation
-        const fallbackChangeMap = activeScenario.result.evidence.changeMap || {
-          visual: images[0]?.previewUrl || activeScenario.result.evidence.imageA?.visual || '',
-          label: 'AI Grounded Evidence Mask'
-        };
-        const newResultData: AnalysisResultData = {
-          id: `AN-${Date.now().toString().slice(-4)}`,
-          query,
-          task: activeScenario.result.selectedTask,
-          taskType: activeScenario.taskType,
-          mode,
-          answer: activeScenario.result.answer,
-          confidence: activeScenario.result.confidence,
-          confidenceLevel: activeScenario.result.confidenceLevel,
-          timestamp: new Date().toISOString(),
-          modelsUsed: activeScenario.result.modelsUsed,
-          executionSummary: activeScenario.result.executionSummary,
-          evidence: {
-            ...activeScenario.result.evidence,
-            imageA: images[0]?.previewUrl ? {
-              visual: images[0].previewUrl,
-              label: images[0].name
-            } : activeScenario.result.evidence.imageA,
-            changeMap: fallbackChangeMap
-          }
-        };
-        setCurrentResult(newResultData);
+        setErrorMessage('The AI inference engine returned an empty response. Please retry.');
       }
-    }, 700);
+    } catch (err: any) {
+      console.error('Analysis execution error:', err);
+      const is503 = (err?.message || '').includes('503') || (err?.message || '').toLowerCase().includes('cold start');
+      if (is503) {
+        setErrorMessage('The SatQuery AI engine is currently waking up from sleep on Render Free Tier (~50-90s cold start). Please click "Execute Reasoning" again in a few moments.');
+      } else {
+        setErrorMessage(err?.message || 'Inference query encountered an error. Please verify the satellite raster format (.tif, .tiff) and retry.');
+      }
+    } finally {
+      stepTimers.forEach(t => clearTimeout(t));
+      setIsProcessing(false);
+    }
   };
 
 
@@ -397,6 +378,26 @@ export const NewAnalysisWorkspace: React.FC<NewAnalysisWorkspaceProps> = ({
         isProcessing={isProcessing}
         disabled={images.length === 0}
       />
+
+      {/* Error / Cold-Start Alert Banner */}
+      {errorMessage && !isProcessing && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-bold text-amber-950">AI Engine Notification</p>
+              <p className="mt-0.5 text-amber-800">{errorMessage}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="text-amber-700 hover:text-amber-900 text-xs font-semibold px-2 py-1 rounded hover:bg-amber-100 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Agent Processing UI */}
       {isProcessing && (

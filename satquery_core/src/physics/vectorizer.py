@@ -5,7 +5,12 @@ Extracts boundaries around detected regions and turns them into standard map sha
 
 from typing import Any, Dict, List
 import numpy as np
-import cv2
+
+try:
+    import cv2
+    HAS_CV2 = True
+except Exception:
+    HAS_CV2 = False
 
 
 def mask_to_geojson(
@@ -67,22 +72,23 @@ def mask_to_geojson(
             },
         }
 
-    uint8_mask = (binary_mask > 0).astype(np.uint8) * 255
-    contours, _ = cv2.findContours(uint8_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
     polygon_rings: List[List[List[float]]] = []
-    for cnt in contours:
-        if cv2.contourArea(cnt) < min_contour_area:
-            continue
+    if HAS_CV2:
+        uint8_mask = (binary_mask > 0).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(uint8_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        pts = cnt.squeeze(axis=1)
-        if pts.ndim != 2 or len(pts) < 3:
-            continue
+        for cnt in contours:
+            if cv2.contourArea(cnt) < min_contour_area:
+                continue
 
-        ring = [_pixel_to_geo(float(p[0]), float(p[1])) for p in pts]
-        if ring[0] != ring[-1]:
-            ring.append(ring[0])
-        polygon_rings.append(ring)
+            pts = cnt.squeeze(axis=1)
+            if pts.ndim != 2 or len(pts) < 3:
+                continue
+
+            ring = [_pixel_to_geo(float(p[0]), float(p[1])) for p in pts]
+            if ring[0] != ring[-1]:
+                ring.append(ring[0])
+            polygon_rings.append(ring)
 
     if not polygon_rings:
         rows, cols = np.where(binary_mask > 0)

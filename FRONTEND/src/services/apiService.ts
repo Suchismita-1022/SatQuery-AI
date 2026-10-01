@@ -207,20 +207,96 @@ export class SatQueryApiService {
   }
 
   /**
+   * Static fallback samples pointing to bundled assets in /samples/ when backend is cold-starting.
+   */
+  public static readonly FALLBACK_SAMPLES: BackendSample[] = [
+    {
+      id: 'sentinel2_godavari_pre',
+      name: 'sentinel2_godavari_pre.tif',
+      label: 'Sentinel-2 Godavari Pre-Flood (MSI 12-Band)',
+      modality: 'Sentinel-2 MSI (12 Bands)',
+      description: 'Pre-flood optical baseline captured over Godavari river basin with calibrated 12-band MSI surface reflectance.',
+      recommendedTask: 'grounding',
+      size_bytes: 1574860,
+      path: 'data/inputs/samples/sentinel2_godavari_pre.tif',
+      url: '/api/inputs/samples/sentinel2_godavari_pre.tif',
+      preview_url: '/samples/sentinel2_godavari_pre_preview.png'
+    },
+    {
+      id: 'sentinel2_godavari_post',
+      name: 'sentinel2_godavari_post.tif',
+      label: 'Sentinel-2 Godavari Post-Flood (MSI 12-Band)',
+      modality: 'Sentinel-2 MSI (12 Bands)',
+      description: 'Post-flood optical acquisition capturing monsoon inundation and reservoir expansion across Godavari delta.',
+      recommendedTask: 'change-analysis',
+      size_bytes: 1574860,
+      path: 'data/inputs/samples/sentinel2_godavari_post.tif',
+      url: '/api/inputs/samples/sentinel2_godavari_post.tif',
+      preview_url: '/samples/sentinel2_godavari_post_preview.png'
+    },
+    {
+      id: 'sentinel1_godavari_sar',
+      name: 'sentinel1_godavari_sar.tif',
+      label: 'Sentinel-1 Godavari SAR C-Band (VV/VH)',
+      modality: 'Sentinel-1 C-SAR (Dual-Pol)',
+      description: 'Cloud-penetrating radar backscatter capturing active surface water boundaries and structural flood extents.',
+      recommendedTask: 'grounding',
+      size_bytes: 262726,
+      path: 'data/inputs/samples/sentinel1_godavari_sar.tif',
+      url: '/api/inputs/samples/sentinel1_godavari_sar.tif',
+      preview_url: '/samples/sentinel1_godavari_sar_preview.png'
+    },
+    {
+      id: 't0_preFlood',
+      name: 't0_preFlood.tiff',
+      label: 'High-Res T0 Pre-Flood Satellite',
+      modality: 'High-Res Optical (3 Bands)',
+      description: 'Pre-staged high-resolution baseline raster for bi-temporal flood inundation analysis.',
+      recommendedTask: 'change-analysis',
+      size_bytes: 363074,
+      path: 'data/inputs/uploads/t0_preFlood.tiff',
+      url: '/api/inputs/uploads/t0_preFlood.tiff',
+      preview_url: '/samples/t0_preFlood_preview.png'
+    },
+    {
+      id: 't1_postFlood',
+      name: 't1_postFlood.tiff',
+      label: 'High-Res T1 Post-Flood Satellite',
+      modality: 'High-Res Optical (3 Bands)',
+      description: 'Pre-staged high-resolution post-flood acquisition for differential inundation detection.',
+      recommendedTask: 'change-analysis',
+      size_bytes: 365413,
+      path: 'data/inputs/uploads/t1_postFlood.tiff',
+      url: '/api/inputs/uploads/t1_postFlood.tiff',
+      preview_url: '/samples/t1_postFlood_preview.png'
+    }
+  ];
+
+  /**
    * Fetch pre-bundled sample datasets with pre-generated previews.
+   * Gracefully falls back to bundled static sample metadata if Render is offline or cold-starting.
    */
   static async getSamples(): Promise<BackendSample[]> {
     try {
-      const res = await fetch(this.getFullUrl('/api/samples'));
-      if (!res.ok) return [];
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(this.getFullUrl('/api/samples'), {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) return this.FALLBACK_SAMPLES;
       const data = await res.json();
-      return (data.samples || []).map((s: BackendSample) => ({
+      if (!data.samples || data.samples.length === 0) {
+        return this.FALLBACK_SAMPLES;
+      }
+      return data.samples.map((s: BackendSample) => ({
         ...s,
         preview_url: s.preview_url ? this.getFullUrl(s.preview_url) : undefined,
         url: this.getFullUrl(s.url),
       }));
     } catch {
-      return [];
+      return this.FALLBACK_SAMPLES;
     }
   }
 
@@ -251,7 +327,7 @@ export class SatQueryApiService {
   }
 
   /**
-   * Upload an image directly to the backend.
+   * Upload a satellite raster (GeoTIFF / TIFF) directly to the backend.
    */
   static async uploadFile(file: File): Promise<{
     filename: string;
@@ -260,77 +336,101 @@ export class SatQueryApiService {
     preview_url?: string;
     original_name?: string;
     file_size_bytes?: number;
-  } | null> {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
 
-      const res = await fetch(this.getFullUrl('/api/upload'), {
-        method: 'POST',
-        body: formData,
-      });
+    const res = await fetch(this.getFullUrl('/api/upload'), {
+      method: 'POST',
+      body: formData,
+    });
 
-      if (!res.ok) return null;
-      const data = await res.json();
-      return {
-        ...data,
-        preview_url: data.preview_url ? this.getFullUrl(data.preview_url) : undefined,
-        url: this.getFullUrl(data.url),
-      };
-    } catch {
-      return null;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const errMsg = errJson?.error || `Upload failed with HTTP ${res.status}`;
+      throw new Error(errMsg);
     }
+    const data = await res.json();
+    return {
+      ...data,
+      preview_url: data.preview_url ? this.getFullUrl(data.preview_url) : undefined,
+      url: this.getFullUrl(data.url),
+    };
   }
 
   /**
-   * Execute an end-to-end analytical query across input rasters.
+   * Execute an end-to-end analytical query across input rasters with timeout and cold-start retry.
    */
-  static async runAnalysis(params: AnalyzeParams): Promise<AnalyzeResult | null> {
-    try {
-      const formData = new FormData();
-      formData.append('query_text', params.queryText);
-      formData.append('confidence_threshold', String(params.confidenceThreshold ?? 0.45));
-      formData.append('enable_physics_verification', String(params.enablePhysicsVerification ?? true));
+  static async runAnalysis(params: AnalyzeParams): Promise<AnalyzeResult> {
+    const formData = new FormData();
+    formData.append('query_text', params.queryText);
+    formData.append('confidence_threshold', String(params.confidenceThreshold ?? 0.45));
+    formData.append('enable_physics_verification', String(params.enablePhysicsVerification ?? true));
 
-      if (params.file) {
-        formData.append('file', params.file);
-      } else if (params.imagePath) {
-        formData.append('image_path', params.imagePath);
-      }
-
-      if (params.secondaryFile) {
-        formData.append('secondary_file', params.secondaryFile);
-      } else if (params.secondaryImagePath) {
-        formData.append('secondary_image_path', params.secondaryImagePath);
-      }
-
-      const res = await fetch(this.getFullUrl('/api/analyze'), {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) return null;
-      const data = await res.json();
-
-      // Convert relative artifact URLs to absolute URLs
-      if (data.urls) {
-        Object.keys(data.urls).forEach((k) => {
-          if (data.urls[k]) {
-            data.urls[k] = this.getFullUrl(data.urls[k]);
-          }
-        });
-      }
-      if (data.primary_preview_url) {
-        data.primary_preview_url = this.getFullUrl(data.primary_preview_url);
-      }
-      if (data.secondary_preview_url) {
-        data.secondary_preview_url = this.getFullUrl(data.secondary_preview_url);
-      }
-
-      return data;
-    } catch {
-      return null;
+    if (params.file) {
+      formData.append('file', params.file);
+    } else if (params.imagePath) {
+      formData.append('image_path', params.imagePath);
     }
+
+    if (params.secondaryFile) {
+      formData.append('secondary_file', params.secondaryFile);
+    } else if (params.secondaryImagePath) {
+      formData.append('secondary_image_path', params.secondaryImagePath);
+    }
+
+    const executeFetch = async (): Promise<Response> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
+      try {
+        const response = await fetch(this.getFullUrl('/api/analyze'), {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        return response;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          throw new Error('Analysis timed out after 90 seconds. The satellite image scene may be too large or the server is processing another heavy query.');
+        }
+        throw err;
+      }
+    };
+
+    let res = await executeFetch();
+
+    // If Render backend is waking up from sleep (503), retry once after a short delay
+    if (res.status === 503) {
+      await new Promise(r => setTimeout(r, 4000));
+      res = await executeFetch();
+    }
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const errMsg = errJson?.error || `Analysis failed with HTTP ${res.status}: ${res.statusText}`;
+      throw new Error(errMsg);
+    }
+
+    const data = await res.json();
+
+    // Convert relative artifact URLs to absolute URLs
+    if (data.urls) {
+      Object.keys(data.urls).forEach((k) => {
+        if (data.urls[k]) {
+          data.urls[k] = this.getFullUrl(data.urls[k]);
+        }
+      });
+    }
+    if (data.primary_preview_url) {
+      data.primary_preview_url = this.getFullUrl(data.primary_preview_url);
+    }
+    if (data.secondary_preview_url) {
+      data.secondary_preview_url = this.getFullUrl(data.secondary_preview_url);
+    }
+
+    return data;
   }
 
   /**

@@ -261,11 +261,14 @@ class CrossModalSpecialist:
         fused_14ch = self._fuse_inputs(optical_geotiff, sar_geotiff)
         _, height, width = fused_14ch.shape
 
-        stride = tile_size - tile_overlap
+        if max(height, width) > 1024:
+            stride = tile_size
+        else:
+            stride = max(tile_size - tile_overlap, 64)
         accum_logits = np.zeros((self.num_classes, height, width), dtype=np.float32)
         count_map = np.zeros((height, width), dtype=np.float32)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             for r in range(0, height, stride):
                 r_end = min(r + tile_size, height)
                 r_start = max(0, r_end - tile_size)

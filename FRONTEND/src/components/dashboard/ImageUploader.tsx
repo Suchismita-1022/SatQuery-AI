@@ -121,7 +121,12 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           }
         }
         setIsUploading(false);
-      }).catch(() => setIsUploading(false));
+      }).catch((err) => {
+        setIsUploading(false);
+        if (err?.message) {
+          setErrorMessage(`Upload error: ${err.message}`);
+        }
+      });
 
       onAddImage(newImage);
     }
