@@ -12,7 +12,7 @@ Following the project directives:
 - **Zero UI Redesign:** Preserving all visual styles, color themes, layouts, typography, and existing user workflows.
 - **Model & Architecture Preservation:** Preserving the existing PyTorch ConvNeXt-v2, Siamese ResNet-50, ViT-Base, and deterministic physics verification architectures.
 - **No Mock or Fake Solutions:** Eliminating silent fallback simulations that mask real backend failures while preserving native 16-bit satellite raster handling.
-- **Definitive Fixes:** Addressing the root causes of Render 503 unavailabilities, memory exhaustion, aggressive polling, broken sample loading, upload restrictions, and request pendency.
+- **Definitive Fixes:** Addressing the root causes of Render 503 unavailabilities, memory exhaustion, aggressive polling, broken sample loading, upload binding failures, and request pendency while enforcing strict GeoTIFF/TIFF satellite raster requirements.
 
 ---
 
@@ -81,8 +81,9 @@ Two independent issues cause the rapid health polling:
 
 ---
 
-### E. Why Sample PNGs Work Differently From User-Uploaded Images
-1. **Frontend File Input Filter Explicitly Rejected PNG & JPEG:**
+### E. Sample Previews vs. User-Uploaded Satellite Rasters
+1. **Strict GeoTIFF / TIFF Requirement is Correct and Intentional:**
+   - SatQuery AI is specifically engineered for satellite remote sensing and Earth observation tasks (ISRO SIH problem statement).
    - In `FRONTEND/src/components/dashboard/ImageUploader.tsx`:
      ```typescript
      // Lines 80-85
@@ -96,8 +97,9 @@ Two independent issues cause the rapid health polling:
      ```html
      <input ref={fileInputRef} type="file" multiple accept=".tif,.tiff" className="hidden" />
      ```
-   - The UI physically barred users from selecting or dropping `.png`, `.jpg`, or `.jpeg` files, even though sample PNGs were pre-registered in the system.
-2. **Backend Silent Fallback to Bundled Datasets:**
+   - This strict restriction is **by design and must be preserved**: genuine satellite queries require multi-spectral raster bands (e.g. Sentinel-2 12-band MSI or Sentinel-1 dual-pol C-SAR), georeferenced Coordinate Reference Systems (CRS), affine geo-transforms, and 16-bit radiometric precision. Standard 8-bit RGB web formats (PNG/JPEG) lack geospatial coordinates and multi-spectral bands required for deterministic physical verification (NDWI, NDVI, MNDWI).
+   - Pre-existing sample PNGs in the repository (`sample_cropland.png`, etc.) exist solely as pre-rendered RGB visual display thumbnails for quick UI demo cards, not as satellite raster inputs.
+2. **The Real Issue: Backend Silent Fallback on Upload Failure:**
    - In `satquery_server.py` lines 418–431:
      ```python
      if not primary_path or not primary_path.exists():
@@ -105,8 +107,8 @@ Two independent issues cause the rapid health polling:
          cand = SAMPLES_DIR / "sentinel2_godavari_pre.tif"
          primary_path = cand
      ```
-   - When a user uploaded an image, if the file path was not correctly preserved across the ephemeral filesystem or multipart boundary, the backend silently replaced the user's image with `sentinel2_godavari_pre.tif` or `sample_urban.png`.
-   - Sample files "worked" because they were hardcoded fallbacks physically baked into the git repository, while user uploads that failed silently executed against sample data.
+   - When a user uploaded a valid `.tif` / `.tiff` raster, if multipart form handling or path resolution failed, the backend silently substituted bundled sample data instead of failing fast or processing the user's uploaded GeoTIFF.
+   - User uploads must directly bind the user's uploaded GeoTIFF to the ingestion and neural inference pipelines without silent fallbacks.
 
 ---
 
@@ -226,17 +228,14 @@ Two independent issues cause the rapid health polling:
   - Update `apiService.ts` to include client-side fallback metadata for bundled samples if `/api/samples` is temporarily unreachable (e.g. during a cold start).
   - In `satquery_server.py`, ensure `/api/samples` reads pre-existing preview paths without generating them synchronously on each GET request.
 
-### Fix 4: Full Support for User-Uploaded Images (PNG, JPG, GeoTIFF)
+### Fix 4: Robust User GeoTIFF Upload Handling (Strict GeoTIFF / TIFF Enforcement)
 - **Files:** `FRONTEND/src/components/dashboard/ImageUploader.tsx`, `satquery_server.py`
+- **Domain Requirement:** SatQuery AI exclusively accepts Earth observation satellite imagery in **GeoTIFF and TIFF** formats (`.tif`, `.tiff`). Standard web image formats (PNG, JPEG, WebP) must remain explicitly barred because they lack geospatial metadata (CRS, affine transform matrix, spatial bounds), multi-spectral sensor bands (Sentinel-2 MSI 12 bands / Sentinel-1 C-SAR dual polarization), and 16-bit radiometric precision required for real satellite analysis and physical verification.
 - **Changes:**
-  - Update `ImageUploader.tsx` to accept `.tif, .tiff, .png, .jpg, .jpeg, .webp`:
-    ```html
-    <input ref={fileInputRef} type="file" multiple accept=".tif,.tiff,.png,.jpg,.jpeg,.webp" className="hidden" />
-    ```
-  - Remove the error block rejecting PNG and JPEG images.
-  - Update upload validation to permit all supported formats up to 35 MB.
-  - Fix `satquery_server.py` so that user uploads passed via multipart form data (`file`) are directly bound to the analysis pipeline without silent fallbacks to sample datasets.
-  - Preserve native 16-bit processing when GeoTIFF is uploaded, and support 3-band visual RGB calibration when PNG/JPEG is uploaded.
+  - **Maintain Strict Frontend File Filter:** Retain the error block in `ImageUploader.tsx` rejecting non-TIFF files and keep `<input ref={fileInputRef} type="file" multiple accept=".tif,.tiff" className="hidden" />`.
+  - **Enforce Backend Upload Restriction:** In `satquery_server.py`, set `ALLOWED_EXTENSIONS = {".tif", ".tiff"}` so backend validation matches frontend validation and rejects non-TIFF user uploads with a descriptive `400 Bad Request`.
+  - **Eliminate Silent Fallbacks:** Refactor `satquery_server.py` multipart form data processing so that user-uploaded `.tif` / `.tiff` rasters are validated via `rasterio` / `geotiff_loader` and directly bound to the analysis pipeline without falling back to bundled sample files. If the uploaded raster is corrupt or missing, return an explicit error.
+  - **Contrast-Stretched Display Previews:** Ensure `ensure_preview_png()` generates browser-renderable contrast-stretched RGB thumbnail PNGs dynamically from the uploaded 16-bit GeoTIFF so the user can immediately visually inspect their satellite imagery in the UI.
 
 ### Fix 5: Resolving `/analyze` Pendency & Adding Frontend Resilience
 - **Files:** `satquery_server.py`, `FRONTEND/src/services/apiService.ts`, `FRONTEND/src/components/dashboard/NewAnalysisWorkspace.tsx`
@@ -279,9 +278,9 @@ sequenceDiagram
     Render-->>User: 200 OK {"status": "healthy"} (< 20ms)
 
     Note over User,Render: 2. User Image Upload & Analysis
-    User->>Render: POST /api/analyze (Multipart: Query + File [PNG/JPG/GeoTIFF])
-    Note over Render: Validate format & dimensions (≤ 35MB)
-    Render->>Engine: Ingestion (Preserve 16-bit GeoTIFF / 8-bit RGB)
+    User->>Render: POST /api/analyze (Multipart: Query + File [GeoTIFF (.tif/.tiff)])
+    Note over Render: Validate GeoTIFF format & dimensions (≤ 35MB)
+    Render->>Engine: Ingestion (Native 16-bit Multi-band GeoTIFF)
     Engine->>Engine: Execute ConvNeXt-v2 / Siamese Inference (Bounded tiling)
     Engine->>Engine: Deterministic Physics Verification (NDWI/NDVI/VARI)
     Engine->>Engine: Generate GeoJSON & Render Visual Artifacts
@@ -318,10 +317,10 @@ Under **Web Service Settings**:
    Open Chrome DevTools Network Tab on Dashboard; verify `/api/health` is called only on load and at low, non-saturating intervals.
 3. **Test 3: Static Sample Display**  
    Verify sample image cards render instantly even if the Render backend is offline.
-4. **Test 4: User PNG / JPEG Upload**  
-   Drag and drop a standard `.png` or `.jpg` image; verify file is accepted and previewed.
-5. **Test 5: User GeoTIFF Upload**  
-   Upload a multi-band `.tif`; verify 16-bit precision is preserved and thumbnail is generated.
+4. **Test 4: Non-TIFF Format Rejection (PNG / JPEG)**  
+   Attempt to upload a standard `.png` or `.jpg` image; verify the UI and backend cleanly reject it with an informative error message explaining that SatQuery AI exclusively accepts satellite rasters in GeoTIFF / TIFF (`.tif`, `.tiff`) format.
+5. **Test 5: User GeoTIFF Upload & Real Processing**  
+   Upload a multi-band `.tif` / `.tiff`; verify file is accepted, a contrast-stretched thumbnail preview is generated, 16-bit precision and CRS metadata are preserved, and the file is directly bound to the analysis pipeline without silent fallback.
 6. **Test 6: Real Neural Analysis Execution**  
    Run query `"Map water inundation and reservoir extents"`; verify `POST /api/analyze` responds with genuine detection masks and GeoJSON features.
 7. **Test 7: Graceful Error Handling**  
